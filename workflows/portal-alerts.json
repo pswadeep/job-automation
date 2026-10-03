@@ -1,0 +1,419 @@
+{
+  "name": "1B - Portal Alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        -176
+      ],
+      "id": "f8d78a5d-5cef-4278-a87e-79fb6cf4568d",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 20,
+        "simple": false,
+        "filters": {
+          "q": "from:(linkedin.com OR naukri.com OR indeed.com OR foundit.in) newer_than:1d"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        48,
+        48
+      ],
+      "id": "bf00cb95-eed0-4ec1-a8a5-71bacb539662",
+      "name": "Get alerts",
+      "webhookId": "5531a9e0-08da-42d2-b0f6-0e58610836c1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zEdwT91px1KZ6z94",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1bkLLtPNByNJ7DuC013c3nF5tUKaDKQbDgMwjyi1lKbo",
+          "mode": "list",
+          "cachedResultName": "Job Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bkLLtPNByNJ7DuC013c3nF5tUKaDKQbDgMwjyi1lKbo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bkLLtPNByNJ7DuC013c3nF5tUKaDKQbDgMwjyi1lKbo/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        48,
+        -176
+      ],
+      "id": "b6eef6e6-5145-4b84-8ea3-b0598b0cd6bb",
+      "name": "Get existing jobs",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cqcUoJta0cpaORgm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const profile = `Target roles: Senior Automation Engineer, QA Automation Engineer, SDET, Senior SDET, Test Automation Engineer, Automation Lead, QA Lead\nMust-have: JavaScript/TypeScript, UI automation, API testing. Strong preference: Playwright\nExperience: 7 years (open to roles asking 5 to 10 years)\nLocations: Hyderabad, Remote (India)\nExclude: internship, fresher, trainee, manual testing only, 12+ years`;\n\nconst toText = html => (html || '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<a\\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi, ' $2 [LINK: $1] ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')\n  .replace(/\\s+/g, ' ').trim();\n\nconst out = [];\nfor (const item of $input.all()) {\n  const e = item.json;\n  if (!e.subject && !e.html && !e.text) continue;\n  const from = JSON.stringify(e.from || '').toLowerCase();\n  const source = from.includes('linkedin') ? 'LinkedIn'\n    : from.includes('naukri') ? 'Naukri'\n    : from.includes('indeed') ? 'Indeed'\n    : from.includes('foundit') || from.includes('monster') ? 'Foundit'\n    : 'Alert';\n  const body = toText(e.html || e.textAsHtml || e.text).slice(0, 30000);\n  const prompt = `This is a job alert email from ${source}. Extract every job listing in it.\n\nCANDIDATE PROFILE:\n${profile}\n\nFor each job give: title, company, location, link (the [LINK: ...] URL next to that job's title), score, reason.\nRules:\n- Score 0-100 using only the title, company and location. Be strict about seniority and role type.\n- Skip jobs that are not related to QA, testing, SDET or automation.\n- Only use links that appear in the email. Never invent data.\n- reason: max 15 words.\nReturn JSON only: {\"jobs\":[{\"title\":\"\",\"company\":\"\",\"location\":\"\",\"link\":\"\",\"score\":0,\"reason\":\"\"}]}\n\nEMAIL SUBJECT: ${e.subject || ''}\nEMAIL TEXT: ${body}`;\n  out.push({ json: {\n    source,\n    geminiBody: {\n      contents: [{ parts: [{ text: prompt }] }],\n      generationConfig: { responseMimeType: 'application/json', temperature: 0.1 }\n    }\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        272
+      ],
+      "id": "b809a04c-77b2-426c-9bb5-db7dce9c7d28",
+      "name": "Build Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.geminiBody) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 7000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        48,
+        496
+      ],
+      "id": "448c6f38-dd06-492e-a825-0ab7753c0991",
+      "name": "Gemini Extract",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "f5HpMIXeJnRBtrLV",
+          "name": "Gemini Key"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');\nconst cleanLink = (l, src) => {\n  l = String(l || '').trim();\n  return src === 'LinkedIn' ? l.split('?')[0] : l;\n};\n\nlet existing = [];\ntry { existing = $('Get existing jobs').all().map(i => i.json); } catch (e) {}\nconst seenLinks = new Set(existing.map(j => String(j.Link || '').trim()).filter(Boolean));\nconst seenKeys = new Set(existing.map(j => norm(j.Company) + '|' + norm(j.Role)));\n\nconst out = [];\n$input.all().forEach((item, i) => {\n  const src = $('Build Prompt').itemMatching(i).json.source;\n  let jobs = [];\n  try {\n    const txt = item.json.candidates[0].content.parts[0].text;\n    jobs = JSON.parse(txt.replace(/```json|```/g, '').trim()).jobs || [];\n  } catch (e) { return; }\n\n  for (const j of jobs) {\n    const link = cleanLink(j.link, src);\n    const key = norm(j.company) + '|' + norm(j.title);\n    if (!link || !j.title) continue;\n    if (Number(j.score) < 60) continue;\n    if (seenLinks.has(link) || seenKeys.has(key)) continue;\n    seenLinks.add(link); seenKeys.add(key);\n    out.push({ json: {\n      'Date': new Date().toISOString().slice(0, 10),\n      'Company': j.company || '',\n      'Role': j.title,\n      'Link': link,\n      'Source': src + ' alert',\n      'Score': Number(j.score) || 0,\n      'Reason': (j.reason || '') + ' (title-based score, check the full JD)',\n      'Tailored Notes': '',\n      'Contact Email': '',\n      'Status': 'New',\n      'Follow-up Date': ''\n    }});\n  }\n});\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        288
+      ],
+      "id": "8dca708b-f57e-41e5-9586-b90aacf098ba",
+      "name": "Parse and Dedupe",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1bkLLtPNByNJ7DuC013c3nF5tUKaDKQbDgMwjyi1lKbo",
+          "mode": "list",
+          "cachedResultName": "Job Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bkLLtPNByNJ7DuC013c3nF5tUKaDKQbDgMwjyi1lKbo/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Jobs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bkLLtPNByNJ7DuC013c3nF5tUKaDKQbDgMwjyi1lKbo/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Role",
+              "displayName": "Role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Reason",
+              "displayName": "Reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Tailored Notes",
+              "displayName": "Tailored Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact Email",
+              "displayName": "Contact Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        -160
+      ],
+      "id": "a9d77e16-e9a9-45fc-a505-d01dc45af9d6",
+      "name": "Save jobs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "cqcUoJta0cpaORgm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8096570819",
+        "text": "={{ $items('Save jobs').length }} new jobs from portal alerts were added to your sheet.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        800,
+        -160
+      ],
+      "id": "e904747b-2ac1-48da-b379-d2931e4e62e8",
+      "name": "Send a text message",
+      "webhookId": "37ae18c3-4cff-40f1-ac0c-3faaf27865ef",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "IuAWi2YtJbOaRr84",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get existing jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get existing jobs": {
+      "main": [
+        [
+          {
+            "node": "Get alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get alerts": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Extract": {
+      "main": [
+        [
+          {
+            "node": "Parse and Dedupe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Dedupe": {
+      "main": [
+        [
+          {
+            "node": "Save jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save jobs": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "32589b1d-2713-4e83-86ab-b26a67f425ff",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ab47874eff22ea0c81b0f7746844f37df482595cb1e2357864e81fbceca3376b"
+  },
+  "nodeGroups": [],
+  "id": "AOZODygUhebdlZAt",
+  "tags": []
+}
