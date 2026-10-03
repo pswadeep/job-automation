@@ -1,0 +1,42 @@
+x-n8n-env: &n8n-env
+  TZ: ${GENERIC_TIMEZONE:-Asia/Kolkata}
+  GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Asia/Kolkata}
+  N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+  N8N_HOST: ${N8N_HOST:-localhost}
+  N8N_PORT: 5678
+  N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+  WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+  N8N_RUNNERS_ENABLED: "true"
+  N8N_DIAGNOSTICS_ENABLED: "false"
+
+services:
+  # One-shot job: builds credentials from .env, imports them and the workflows.
+  n8n-init:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: "no"
+    entrypoint: ["/bin/sh", "/scripts/init.sh"]
+    env_file: .env
+    environment:
+      <<: *n8n-env
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./scripts:/scripts:ro
+      - ./credentials:/credentials:ro
+      - ./workflows:/workflows:ro
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    env_file: .env
+    environment:
+      <<: *n8n-env
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      n8n-init:
+        condition: service_completed_successfully
+
+volumes:
+  n8n_data:

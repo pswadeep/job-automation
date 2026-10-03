@@ -1,0 +1,68 @@
+name: Run Portal Alerts
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"   # every 12h (UTC), same cadence as the n8n Schedule Trigger
+  workflow_dispatch:          # manual run from the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - "workflows/**"
+      - "credentials/**"
+      - "scripts/**"
+      - "docker-compose.yml"
+      - ".github/workflows/run-portal-alerts.yml"
+
+concurrency:
+  group: portal-alerts
+  cancel-in-progress: false
+
+env:
+  WORKFLOW_ID: AOZODygUhebdlZAt
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check workflow JSON exists
+        run: |
+          ls workflows/*.json >/dev/null 2>&1 || { echo "No workflow JSON in workflows/"; exit 1; }
+          grep -q "\"id\": \"$WORKFLOW_ID\"" workflows/*.json || { echo "Workflow id $WORKFLOW_ID not found"; exit 1; }
+
+      - name: Create .env from secrets
+        env:
+          N8N_ENCRYPTION_KEY: ${{ secrets.N8N_ENCRYPTION_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          SHEETS_REFRESH_TOKEN: ${{ secrets.SHEETS_REFRESH_TOKEN }}
+          CALENDAR_REFRESH_TOKEN: ${{ secrets.CALENDAR_REFRESH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          {
+            echo "N8N_ENCRYPTION_KEY=$N8N_ENCRYPTION_KEY"
+            echo "GENERIC_TIMEZONE=Asia/Kolkata"
+            echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID"
+            echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET"
+            echo "GMAIL_REFRESH_TOKEN=$GMAIL_REFRESH_TOKEN"
+            echo "SHEETS_REFRESH_TOKEN=$SHEETS_REFRESH_TOKEN"
+            echo "CALENDAR_REFRESH_TOKEN=$CALENDAR_REFRESH_TOKEN"
+            echo "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN"
+            echo "GEMINI_API_KEY=$GEMINI_API_KEY"
+          } > .env
+
+      - name: Import credentials and workflows
+        run: docker compose run --rm n8n-init
+
+      - name: Execute workflow once
+        run: docker compose run --rm --no-deps n8n execute --id="$WORKFLOW_ID"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v --remove-orphans || true
+          rm -f .env
