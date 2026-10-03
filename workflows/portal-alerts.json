@@ -23,6 +23,19 @@
     },
     {
       "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -192,
+        16
+      ],
+      "id": "f5c44076-ef76-4f16-98d4-91e6557ff74f",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
         "operation": "getAll",
         "limit": 20,
         "simple": false,
@@ -325,6 +338,17 @@
   "pinData": {},
   "connections": {
     "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get existing jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
       "main": [
         [
           {

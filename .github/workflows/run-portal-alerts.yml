@@ -31,6 +31,7 @@ jobs:
         run: |
           ls workflows/*.json >/dev/null 2>&1 || { echo "No workflow JSON in workflows/"; exit 1; }
           grep -q "\"id\": \"$WORKFLOW_ID\"" workflows/*.json || { echo "Workflow id $WORKFLOW_ID not found"; exit 1; }
+          grep -q '"type": "n8n-nodes-base.executeWorkflowTrigger"' workflows/*.json || { echo "Workflow needs an Execute Workflow Trigger for CLI execution"; exit 1; }
 
       - name: Create .env from secrets
         env:
