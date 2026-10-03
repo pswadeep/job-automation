@@ -24,7 +24,7 @@ services:
       - ./credentials:/credentials:ro
       - ./workflows:/workflows:ro
 
-  n8n:
+   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
     restart: unless-stopped
     ports:
@@ -39,4 +39,4 @@ services:
         condition: service_completed_successfully
 
 volumes:
- n8n_data:/home/node/.n8n
+  n8n_data:
